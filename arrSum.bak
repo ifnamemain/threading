@@ -1,0 +1,90 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
+#include <stdint.h>
+#include <omp.h>
+
+#define NTHREADS 4
+#define SIZE NTHREADS*100000000L
+
+struct params {
+  uint64_t * arr;
+  uint64_t pthreadNum;
+  uint64_t sum;
+};
+
+/* The worker function for the threads */
+void * myFun (void * x){
+  uint64_t i, numThreads;
+  uint64_t locSum = 0;
+  struct params * b = (struct params *) x;
+  numThreads = b -> pthreadNum;
+  for (i = 0; i < (uint64_t)(SIZE/numThreads); ++i){
+    locSum += b->arr[i];
+  }
+  b->sum = locSum;
+  //pthread_exit(NULL);
+  return NULL;
+}
+
+int main(int argc, char * argv[]){
+  double runTime;
+  uint64_t rc, i;
+  uint64_t sum1 = 0, sum2 = 0;
+  pthread_t threads[NTHREADS];
+
+  /* create array to sum over */
+  uint64_t * myArr = NULL;
+  myArr = (uint64_t *) calloc(SIZE, sizeof(uint64_t));
+  if (myArr == NULL){
+    printf("problem allocating memory\n");
+    return 1; 
+  }
+  for (i = 0; i < SIZE; ++i){
+    myArr[i] = i;
+  }
+
+  /* create array of input params structs to feed to threads */
+  struct params p;
+  p.sum = 0;
+  p.pthreadNum = NTHREADS;
+  struct params inputs[NTHREADS];
+  for(i = 0; i != NTHREADS; ++i){
+    p.arr = myArr + i*(uint64_t)(SIZE/NTHREADS);
+    inputs[i] = p;
+  }
+
+  /* spawn the threads */
+  runTime = -omp_get_wtime();
+  for(i = 0; i != NTHREADS; ++i){
+    rc = pthread_create(&threads[i], NULL, myFun, (void *) &inputs[i]);
+  }
+
+  /* wait for threads to finish */
+  for(i = 0; i != NTHREADS; ++i){
+    rc = pthread_join(threads[i], NULL);
+  }
+  runTime += omp_get_wtime();
+  printf("Parallelized code run time: %f\n", runTime);
+
+  /* run the unparallelized code */
+  runTime = -omp_get_wtime();
+  p.arr = myArr;
+  p.pthreadNum = 1;
+  myFun((void*)&p);
+  runTime += omp_get_wtime();
+  printf("Unparallelized code run time: %f\n", runTime);
+
+  /* consolidate and print results from threads */
+  for(i = 0; i != NTHREADS; ++i){
+    sum1 += inputs[i].sum;
+  }
+  printf("sum1, sum2: %lld, %lld \n", (long long)sum1, (long long)p.sum);
+  free(myArr);
+
+  /* be dissapointed when my parallelized code showed no speedup */
+  pthread_exit(NULL);
+  return 0;
+}
+
