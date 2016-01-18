@@ -7,7 +7,7 @@
 
 #define NTHREADS 4
 #define SIZE NTHREADS*100000000L
-
+//testing
 struct params {
   uint64_t * arr;
   uint64_t pthreadNum;
